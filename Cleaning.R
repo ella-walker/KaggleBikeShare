@@ -41,57 +41,51 @@ bike_predictions <- predict(bike_workflow, new_data = testData) |>
   mutate(count = exp(count)) # back-transform log(count) prediction
 
 ## Penalized Regression Model
-preg_model_1 <- linear_reg(penalty= 5, mixture= 0) |>
+preg_model <- linear_reg(penalty= tune(), mixture= tune()) |>
   set_engine("glmnet")
-preg_wf_1 <- workflow() |>
-  add_recipe(bike_recipe) |>
-  add_model(preg_model_1) |>
-  fit(data=trainData)
-prediction_1 <- predict(preg_wf_1, new_data=testData)
 
-preg_model_2 <- linear_reg(penalty= 10, mixture= 1) |>
-  set_engine("glmnet")
-preg_wf_2 <- workflow() |>
+## Set Workflow
+preg_wf <- workflow() |>
   add_recipe(bike_recipe) |>
-  add_model(preg_model_2) |>
-  fit(data=trainData)
-prediction_2 <- predict(preg_wf_2, new_data=testData)
+  add_model(preg_model)
 
-preg_model_3 <- linear_reg(penalty= 20, mixture= 0.2) |>
-  set_engine("glmnet")
-preg_wf_3 <- workflow() |>
-  add_recipe(bike_recipe) |>
-  add_model(preg_model_3) |>
-  fit(data=trainData)
-prediction_3 <- predict(preg_wf_3, new_data=testData)
+## Grid of values to tune over
+grid_of_tuning_params <- grid_regular(penalty(),
+                                      mixture(),
+                                      levels = 5)
 
-preg_model_4 <- linear_reg(penalty= 1, mixture= 0.5) |>
-  set_engine("glmnet")
-preg_wf_4 <- workflow() |>
-  add_recipe(bike_recipe) |>
-  add_model(preg_model_4) |>
-  fit(data=trainData)
-prediction_4 <- predict(preg_wf_4, new_data=testData)
+## Split data for CV
+folds <- vfold_cv(trainData, v = 5, repeats = 1)
 
-preg_model_5 <- linear_reg(penalty= 15, mixture= 0.8) |>
-  set_engine("glmnet")
-preg_wf_5 <- workflow() |>
-  add_recipe(bike_recipe) |>
-  add_model(preg_model_5) |>
-  fit(data=trainData)
-prediction_5 <- predict(preg_wf_5, new_data=testData)
+## Run the CV
+CV_results <- preg_wf |>
+  tune_grid(resamples = folds,
+            grid = grid_of_tuning_params,
+            metrics = metric_set(rmse, mae))
+
+##Find Best Tuning Parameters
+bestTune <- CV_results |>
+  select_best(metric="rmse")
+
+## Finalize the Workflow & fit it
+final_wf <- preg_wf |>
+  finalize_workflow(bestTune) |>
+  fit(data = trainData)
+
+## Predict
+preds <- predict(final_wf, new_data = testData)
 
 ## Format the Predictions for Submission to Kaggle
-kaggle_submission <- prediction_1 |>
+kaggle_submission <- preds |>
   bind_cols(testData |> select(datetime)) |>
   transmute(
-    datetime = format(datetime, "%Y-%m-%d %H:%M:%S"),  # force exact format
-    count = pmax(0, .pred)
+    datetime = format(datetime, "%Y-%m-%d %H:%M:%S"),
+    count = pmax(0, exp(.pred))
   )
 
 ## Write out the file
 vroom_write(kaggle_submission,
-            file = "~/Documents/STAT 348/KaggleBikeShare/penalized_1.csv",
+            file = "~/Documents/STAT 348/KaggleBikeShare/penalized_tuning.csv",
             delim = ",")
 
 # Print first 5 rows of baked data set
