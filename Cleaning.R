@@ -3,6 +3,7 @@ library(tidyverse)
 library(tidymodels)
 library(vroom)
 library(glmnet)
+library(bonsai)
 
 # Cleaning data
 bike <- vroom("~/Documents/STAT 348/KaggleBikeShare/bike-sharing-demand/train.csv")
@@ -192,4 +193,50 @@ random_forest_kaggle_submission <- random_forest_preds |>
 
 vroom_write(random_forest_kaggle_submission,
             file = "~/Documents/STAT 348/KaggleBikeShare/random_forest.csv",
+            delim = ",")
+
+###
+## BART
+###
+
+
+bart_model <- bart(trees = tune()) |>
+  set_engine("dbarts") |>
+  set_mode("regression")
+
+bart_wf <- workflow() |>
+  add_recipe(bike_recipe) |>
+  add_model(bart_model)
+
+bart_grid_of_tuning_params <- grid_regular(
+  trees(range = c(20,200)),
+  levels = 5
+)
+
+folds <- vfold_cv(trainData, v = 5, repeats = 1)
+
+bart_CV_results <- bart_wf |>
+  tune_grid(
+    resamples = folds,
+    grid = bart_grid_of_tuning_params,
+    metrics = metric_set(rmse, mae))
+
+bart_bestTune <- bart_CV_results |>
+  select_best(metric="rmse")
+
+bart_final_wf <- bart_wf |>
+  finalize_workflow(bart_bestTune) |>
+  fit(data = trainData)
+
+bart_preds <- predict(bart_final_wf, new_data = testData)
+
+bart_kaggle_submission <- bart_preds |>
+  bind_cols(testData |> select(datetime)) |>
+  transmute(
+    datetime = format(datetime, "%Y-%m-%d %H:%M:%S"),
+    count = pmax(0, exp(.pred))
+  )
+
+vroom_write(bart_kaggle_submission,
+            file = "~/Documents/STAT 348/KaggleBikeShare/bart.csv",
             delim = ",")
