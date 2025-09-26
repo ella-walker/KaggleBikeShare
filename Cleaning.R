@@ -4,6 +4,7 @@ library(tidymodels)
 library(vroom)
 library(glmnet)
 library(bonsai)
+library(agua)
 
 # Cleaning data
 bike <- vroom("~/Documents/STAT 348/KaggleBikeShare/bike-sharing-demand/train.csv")
@@ -239,4 +240,33 @@ bart_kaggle_submission <- bart_preds |>
 
 vroom_write(bart_kaggle_submission,
             file = "~/Documents/STAT 348/KaggleBikeShare/bart.csv",
+            delim = ",")
+
+
+##
+### Stacking Models (with H2O.ai)
+##
+
+h2o::h2o.init()
+
+auto_model <- auto_ml() |>
+  set_engine("h2o", max_runtime_secs = 30, max_models = 50) |>
+  set_mode("regression")
+
+automl_wf <- workflow() |>
+  add_recipe(bike_recipe) |>
+  add_model(auto_model) |>
+  fit(data = trainData)
+
+auto_preds <- predict(automl_wf, new_data = testData)
+
+auto_kaggle_submission <- auto_preds |>
+  bind_cols(testData |> select(datetime)) |>
+  transmute(
+    datetime = format(datetime, "%Y-%m-%d %H:%M:%S"),
+    count = pmax(0, exp(.pred))
+  )
+
+vroom_write(auto_kaggle_submission,
+            file = "~/Documents/STAT 348/KaggleBikeShare/stacking-model.csv",
             delim = ",")
