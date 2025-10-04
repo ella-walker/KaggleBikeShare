@@ -31,6 +31,8 @@ bike_recipe <- recipe(count ~ ., data = trainData) |>
   step_normalize(all_numeric_predictors())
 bake(prep(bike_recipe), trainData)
 
+
+
 ## Linear Regression Model with Recipe
 lin_model <- linear_reg() |>
   set_engine("lm") |>
@@ -269,4 +271,30 @@ auto_kaggle_submission <- auto_preds |>
 
 vroom_write(auto_kaggle_submission,
             file = "~/Documents/STAT 348/KaggleBikeShare/stacking-model.csv",
+            delim = ",")
+
+##
+### Data Robot
+##
+
+datarobot <- read_csv("~/Documents/STAT 348/KaggleBikeShare/datarobot_predictions.csv")
+
+datarobot <- datarobot |>
+  mutate(datetime = as.POSIXct(datetime, format = "%m/%d/%Y %H:%M", tz = "UTC")) |>
+  mutate(datetime = format(datetime, "%Y-%m-%d %H:%M:%S"))
+
+vroom_write(datarobot,
+            file = "~/Documents/STAT 348/KaggleBikeShare/datarobot.csv",
+            delim = ",")
+
+
+
+datarobot_2 <- read_csv("~/Documents/STAT 348/KaggleBikeShare/datarobotcleanedresult.csv")
+
+datarobot_2 <- datarobot_2 |>
+  mutate(datetime = as.POSIXct(datetime, format = "%m/%d/%Y %H:%M", tz = "UTC")) |>
+  mutate(datetime = format(datetime, "%Y-%m-%d %H:%M:%S"))
+  
+vroom_write(datarobot_2,
+            file = "~/Documents/STAT 348/KaggleBikeShare/datarobot_2.csv",
             delim = ",")
